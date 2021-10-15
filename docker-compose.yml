@@ -16,6 +16,7 @@ services:
       target: dev
       args:
         RUN_LEVEL: dev
+        PYTHON_VERSION: "3.10"
     volumes:
       - ./ymal_api:/opt/app
     networks:
