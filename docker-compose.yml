@@ -1,0 +1,81 @@
+version: "3.4"
+
+networks:
+  default:
+
+services:
+  api:
+    container_name: ymal-api
+    expose:
+      - 8080
+    ports:
+      - "8080:8080"
+    build:
+      context: ymal_api
+      dockerfile: deployment/server/Dockerfile
+      target: dev
+      args:
+        RUN_LEVEL: dev
+    volumes:
+      - ./ymal_api:/opt/app
+    networks:
+      - default
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    depends_on:
+      - mongo
+      - redis
+      - neo4j
+
+  mongo:
+    container_name: ymal-mongo
+    image: library/mongo:4.2
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: user
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: ymal
+    networks:
+      - default
+    volumes:
+      - ./.docker_data/mongo:/data/db
+      - ./docker-init/mongo:/docker-entrypoint-initdb.d
+
+  neo4j:
+    container_name: ymal-neo4j
+    image: neo4j:4.0.3
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - .docker_data/neo4j:/var/lib/neo4j/data
+    environment:
+      NEO4J_AUTH: neo4j/password
+
+  redis:
+    container_name: ymal-redis
+    image: library/redis:6
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    networks:
+      - default
+    volumes:
+    - ./.docker_data/redis:/var/lib/redis
+
+  nginx:
+    container_name: ymal-nginx
+    expose:
+      - 80
+    build:
+      context: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx:/etc/nginx
+    depends_on:
+      - api
+    networks:
+      - default

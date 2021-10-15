@@ -1,0 +1,52 @@
+[tool.poetry]
+name = "ymal-api"
+version = "0.1.0"
+description = ""
+authors = ["Igor Beschastnov <beschastnovigor@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+fastapi = "^0.65.1"
+loguru = "^0.5.3"
+pydantic = "^1.8.1"
+uvicorn = {extras = ["standard"], version ="^0.13.4"}
+ujson = "^1.35"
+gunicorn = "^20.0.4"
+colorama = "^0.4.4"
+inquirer = "^2.7.0"
+aioredis = {version = "2.0.0a1", extras = ["hiredis"]}
+neo4j = "^4.3.1"
+motor = "^2.4.0"
+
+[tool.poetry.dev-dependencies]
+autoflake = "^1.4"
+black = "^21.4b1"
+factory-boy = "^3.2.0"
+flake8 = "^3.9.0"
+flake8-annotations-complexity = "^0.0.6"
+flake8-bandit = "^2.1.2"
+flake8-breakpoint = "^1.1.0"
+flake8-bugbear = "^21.3.2"
+flake8-builtins = "^1.5.3"
+flake8-comprehensions = "^3.4.0"
+flake8-eradicate = "^1.0.0"
+flake8-expression-complexity = "^0.0.9"
+flake8-isort = "^4.0.0"
+flake8-print = "^4.0.0"
+flake8-pytest = "^1.3"
+flake8-pytest-style = "^1.4.0"
+flake8-requirements = "^1.4.0"
+flake8-return = "^1.1.2"
+isort = "^5.8.0"
+mypy = "^0.812"
+pep8-naming = "^0.11.1"
+pylint = "^2.7.2"
+pytest = "^6.2.2"
+pytest-cov = "^2.11.1"
+pytest-deadfixtures = "^2.2.1"
+pytest-mock = "^3.6.0"
+requests = "^2.25.1"
+
+[build-system]
+requires = ["poetry>=1.0.2"]
+build-backend = "poetry.masonry.api"
