@@ -130,7 +130,7 @@ def main() -> None:
         
         CREATE (ObSeyaha:Point {{id:{next_id()}, name:"Обь-Се-Яха"}})
         CREATE (ObAntipauta)-[:Path {{weight:0, traversal: "any"}}]->(ObSeyaha)
-        CREATE (ObSeyaha)-[:Path {{weight:0, traversal: "any"}}]->({point_name('Се-Яха')})
+        CREATE (ObSeyaha)-[:Path {{weight:0, traversal: "small"}}]->({point_name('Се-Яха')})
         
         CREATE ({point_name('Антипаюта')})-[:Path {{weight:0, traversal: "small"}}]->({point_name('Находка')})
         CREATE ({point_name('Находка')})-[:Path {{weight:0, traversal: "any"}}]->({point_name('Самбург')})
