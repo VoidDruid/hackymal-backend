@@ -30,6 +30,23 @@ services:
       - redis
       - neo4j
 
+  api-go:
+    container_name: ymal-api-go
+    build:
+      context: ymal_api_go
+      dockerfile: deployment/server/Dockerfile
+    expose:
+      - 8000
+    ports:
+      - "8000:8000"
+    networks:
+      - default
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    depends_on:
+      - mongo
+
   mongo:
     container_name: ymal-mongo
     image: library/mongo:4.2
@@ -43,7 +60,7 @@ services:
       - default
     volumes:
       - ./.docker_data/mongo:/data/db
-      - ./docker-init/mongo:/docker-entrypoint-initdb.d
+      - ./server-init/mongo:/server-entrypoint-initdb.d
 
   neo4j:
     container_name: ymal-neo4j
