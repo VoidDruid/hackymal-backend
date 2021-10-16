@@ -12,7 +12,7 @@ def create_session_id() -> str:
 async def create_session(redis: aioredis.Redis) -> str:
     session_id = create_session_id()
 
-    await redis.rpush(session_id, -1)
+    await redis.hset(session_id, "online", 1)
     await redis.expire(session_id, SESSION_TTL)
 
     return session_id

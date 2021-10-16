@@ -16,8 +16,9 @@ services:
       target: dev
       args:
         RUN_LEVEL: dev
-        PYTHON_VERSION: "3.10"
+        PYTHON_VERSION: "3.8"
     volumes:
+      - ./gis:/etc/gis
       - ./ymal_api:/opt/app
     networks:
       - default

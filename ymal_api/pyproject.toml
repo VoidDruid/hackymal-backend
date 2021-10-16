@@ -17,6 +17,7 @@ inquirer = "^2.7.0"
 aioredis = {version = "2.0.0a1", extras = ["hiredis"]}
 neo4j = "^4.3.1"
 motor = "^2.4.0"
+networkx = {version = "^2.6.3", extras = ['default']}
 
 [tool.poetry.dev-dependencies]
 autoflake = "^1.4"

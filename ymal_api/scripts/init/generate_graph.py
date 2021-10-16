@@ -1,3 +1,5 @@
+import csv
+
 from dataplane import neo4j
 from scripts.utils import info, title
 
@@ -8,32 +10,99 @@ def format_q(q):
 
 SYMBOLS = (
     "абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ",
-    "abvgdeejzijklmnoprstufhzcss_y_euaABVGDEEJZIJKLMNOPRSTUFHZCSS_Y_EUA"
+    "abvgdeejzijklmnoprstufhzcss_y_euaABVGDEEJZIJKLMNOPRSTUFHZCSS_Y_EUA",
 )
 tr = {ord(a): ord(b) for a, b in zip(*SYMBOLS)}
 
 
 def _graph_name(name: str):
-    return name.translate(tr).replace('-', '_').replace(' ', '')
+    return name.translate(tr).replace("-", "_").replace(" ", "")
 
 
 def consumer_name(name: str):
-    return _graph_name(name) + '_c'
+    return _graph_name(name) + "_c"
 
 
 def point_name(name: str):
-    return _graph_name(name) + '_p'
+    return _graph_name(name) + "_p"
 
 
 def main() -> None:
+    print(title("River graph"))
     print(info("Generating path graph"))
 
     def generator(tx):
+        distance_matrix = {}
+        with open("/etc/gis/distance_matrix.csv", newline="") as matrix_csv:
+            reader = csv.DictReader(matrix_csv)
+            for row in reader:
+                distance_matrix[row["ID"]] = {k: v for k, v in row.items() if k != "ID"}
+
+        def convert_dist(distance_raw):
+            return round(float(distance_raw) / 1000, 3)
+
+        translit_map = {
+            "Pitlar": "Pitlyar",
+            "Suryskary": "Shurishakri",
+            "Vosahovo": "Vosyahovo",
+            "Muji": "Muzhi",
+            "ObKatravozh": "ObKatrovozh",
+            "Azovy": "Azovi",
+            "Katravoj": "Katrovozh",
+            "ZelenyjAr": "ZeleniyYar",
+            "Labytnangi": "Labytnagi",
+            "Harsajm": "Harsaim",
+            "Beloarsk": "Beloyarsk",
+            "Suc_e": "Schuchie",
+            "ObKutopygan": "ObKutopugan",
+            "Kutop_ugan": "Kutopugan",
+            "Ar_Sale": "YarSale",
+            "NovyjPort": "NewPort",
+            "MysKamennyj": "MysKamenniy",
+            "Se_Aha": "Seyaha",
+        }
+
+        def path_command(point1, point2, traversal="any"):
+            def preprocess_name(p_name):
+                if p_name.endswith("_p"):
+                    p_name = p_name[:-2]
+                return translit_map.get(p_name, p_name)
+
+            point1_search = preprocess_name(point1)
+            point2_search = preprocess_name(point2)
+
+            distance = convert_dist(distance_matrix[point1_search][point2_search])
+            return f'CREATE ({point1})-[:Path {{weight:{distance}, traversal: "{traversal}"}}]->({point2})'
+
         consumers_set = {
-            'Антипаюта', 'Нори', 'Яр-Сале', 'Се-Яха', 'Питляр', 'Самбург', 'Восяхово', 'Шурышкары',
-            'Салемал', 'Ныда', 'Горки', 'Кутопьюган', 'Находка', 'Овгорт', 'Лабытнанги', 'Мыс Каменный', 'Мужи',
-            'Белоярск', 'Зеленый Яр', 'Салехард', 'Аксарка', 'Щучье', 'Катравож', 'Лопхари', 'Харсайм',
-            'Азовы', 'Панаевск', 'Новый Порт'
+            "Антипаюта",
+            "Нори",
+            "Яр-Сале",
+            "Се-Яха",
+            "Питляр",
+            "Самбург",
+            "Восяхово",
+            "Шурышкары",
+            "Салемал",
+            "Ныда",
+            "Горки",
+            "Кутопьюган",
+            "Находка",
+            "Овгорт",
+            "Лабытнанги",
+            "Мыс Каменный",
+            "Мужи",
+            "Белоярск",
+            "Зеленый Яр",
+            "Салехард",
+            "Аксарка",
+            "Щучье",
+            "Катравож",
+            "Лопхари",
+            "Харсайм",
+            "Азовы",
+            "Панаевск",
+            "Новый Порт",
         }
 
         current_id = 0
@@ -46,94 +115,93 @@ def main() -> None:
         # 'name': (consumer_id, point_id)
         consumers_and_points = {name: (next_id(), next_id()) for name in consumers_set}
 
-        consumers_query = ''
+        consumers_query = ""
         for consumer_name_ in consumers_and_points:
             consumer_id, point_id = consumers_and_points[consumer_name_]
             consumer_tr_name = consumer_name(consumer_name_)
             point_tr_name = point_name(consumer_name_)
-            consumers_query += \
-                f'CREATE ({consumer_tr_name}:Consumer {{id: {consumer_id}, name:"{consumer_name_}"}})\n'
-            consumers_query += \
-                f'CREATE ({point_tr_name}:Point {{id: {point_id}, name:"Причал {consumer_name_}"}})\n'
+            consumers_query += f'CREATE ({consumer_tr_name}:Consumer {{id: {consumer_id}, name:"{consumer_name_}"}})\n'
+            consumers_query += f'CREATE ({point_tr_name}:Point {{id: {point_id}, name:"Причал {consumer_name_}"}})\n'
             consumers_query += f'CREATE ({point_tr_name})-[:Path {{weight:0, traversal: "any"}}]->({consumer_tr_name})\n'
 
         tx_return = tx.run(
-            consumers_query + f"""
+            consumers_query
+            + f"""
         CREATE (ObLophari:Point {{id:{next_id()}, name:"Обь-Лопхари"}})
-        CREATE ({point_name('Лопхари')})-[:Path {{weight:0, traversal: "any"}}]->(ObLophari)
-        CREATE (ObLophari)-[:Path {{weight:0, traversal: "any"}}]->({point_name('Горки')})
+        {path_command('ObLophari', point_name('Лопхари'))}
+        {path_command('ObLophari', point_name('Горки'))}
         
-        CREATE ({point_name('Горки')})-[:Path {{weight:0, traversal: "any"}}]->({point_name('Питляр')})
+        {path_command(point_name('Горки'), point_name('Питляр'))}
         
         CREATE (ObPitlyar:Point {{id:{next_id()}, name:"Обь-Питляр"}})
-        CREATE ({point_name('Питляр')})-[:Path {{weight:0, traversal: "any"}}]->(ObPitlyar)
-        CREATE (ObPitlyar)-[:Path {{weight:0, traversal: "small"}}]->({point_name('Шурышкары')})
+        {path_command(point_name('Питляр'), 'ObPitlyar')}
+        {path_command('ObPitlyar', point_name('Шурышкары'), 'small')}
 
         CREATE (ObVosyahovo:Point {{id:{next_id()}, name:"Обь-Восяхово"}})
-        CREATE ({point_name('Шурышкары')})-[:Path {{weight:0, traversal: "small"}}]->(ObVosyahovo)
-        CREATE (ObVosyahovo)-[:Path {{weight:0, traversal: "small"}}]->({point_name('Восяхово')})
-        CREATE (ObVosyahovo)-[:Path {{weight:0, traversal: "small"}}]->({point_name('Мужи')})
+        {path_command(point_name('Шурышкары'), 'ObVosyahovo', 'small')}
+        {path_command('ObVosyahovo', point_name('Восяхово'), 'small')}
+        {path_command('ObVosyahovo', point_name('Мужи'), 'small')}
         
         CREATE (ObMuzhi:Point {{id:{next_id()}, name:"Обь-Мужи"}})
-        CREATE ({point_name('Мужи')})-[:Path {{weight:0, traversal: "small"}}]->(ObMuzhi)
-        CREATE (ObMuzhi)-[:Path {{weight:0, traversal: "small"}}]->({point_name('Азовы')})
-        CREATE (ObMuzhi)-[:Path {{weight:0, traversal: "small"}}]->({point_name('Овгорт')})
+        {path_command(point_name('Мужи'), 'ObMuzhi', 'small')}
+        {path_command('ObMuzhi', point_name('Азовы'), 'small')}
+        {path_command('ObMuzhi', point_name('Овгорт'), 'small')}
         
         CREATE (ObKatravozh:Point {{id:{next_id()}, name:"Обь-Катравож"}})
-        CREATE (ObPitlyar)-[:Path {{weight:0, traversal: "any"}}]->(ObKatravozh)
-        CREATE (ObKatravozh)-[:Path {{weight:0, traversal: "small"}}]->({point_name('Катравож')})
-        CREATE (ObKatravozh)-[:Path {{weight:0, traversal: "any"}}]->({point_name('Салехард')})
+        {path_command('ObPitlyar', 'ObKatravozh')}
+        {path_command('ObKatravozh', point_name('Катравож'), 'small')}
+        {path_command('ObKatravozh', point_name('Салехард'))}
         
-        CREATE ({point_name('Салехард')})-[:Path {{weight:0, traversal: "small"}}]->({point_name('Зеленый Яр')})
-        CREATE ({point_name('Салехард')})-[:Path {{weight:0, traversal: "any"}}]->({point_name('Лабытнанги')})
-        CREATE ({point_name('Лабытнанги')})-[:Path {{weight:0, traversal: "any"}}]->({point_name('Харсайм')})
+        {path_command(point_name('Салехард'), point_name('Зеленый Яр'), 'small')}
+        {path_command(point_name('Салехард'), point_name('Лабытнанги'))}
+        {path_command(point_name('Лабытнанги'), point_name('Харсайм'))}
         
         CREATE (ObBeloyarsk:Point {{id:{next_id()}, name:"Обь-Белоярск"}})
-        CREATE ({point_name('Харсайм')})-[:Path {{weight:0, traversal: "any"}}]->(ObBeloyarsk)
-        CREATE (ObBeloyarsk)-[:Path {{weight:0, traversal: "small"}}]->({point_name('Белоярск')})
-        CREATE (ObBeloyarsk)-[:Path {{weight:0, traversal: "any"}}]->({point_name('Аксарка')})
+        {path_command(point_name('Харсайм'), 'ObBeloyarsk',)}
+        {path_command('ObBeloyarsk', point_name('Белоярск'), 'small')}
+        {path_command('ObBeloyarsk', point_name('Аксарка'))}
         
-        CREATE ({point_name('Белоярск')})-[:Path {{weight:0, traversal: "small"}}]->({point_name('Щучье')})
+        {path_command(point_name('Белоярск'), point_name('Щучье'), 'small')}
         
         CREATE (ObBeloyarsk_2:Point {{id:{next_id()}, name:"Обь-Белоярск 2"}})
-        CREATE ({point_name('Аксарка')})-[:Path {{weight:0, traversal: "any"}}]->(ObBeloyarsk_2)
-        CREATE ({point_name('Белоярск')})-[:Path {{weight:0, traversal: "small"}}]->(ObBeloyarsk_2)
-        CREATE (ObBeloyarsk_2)-[:Path {{weight:0, traversal: "small"}}]->({point_name('Щучье')})
-        CREATE (ObBeloyarsk_2)-[:Path {{weight:0, traversal: "any"}}]->({point_name('Салемал')})
+        {path_command(point_name('Аксарка'), 'ObBeloyarsk_2',)}
+        {path_command(point_name('Белоярск'), 'ObBeloyarsk_2', 'small')}
+        {path_command('ObBeloyarsk_2', point_name('Щучье'), 'small')}
+        {path_command('ObBeloyarsk_2', point_name('Салемал'))}
         
         CREATE (ObKutopygan:Point {{id:{next_id()}, name:"Обь-Кутопьюган"}})
-        CREATE ({point_name('Салемал')})-[:Path {{weight:0, traversal: "any"}}]->(ObKutopygan)
-        CREATE (ObKutopygan)-[:Path {{weight:0, traversal: "any"}}]->({point_name('Кутопьюган')})
+        {path_command(point_name('Салемал'), 'ObKutopygan')}
+        {path_command('ObKutopygan', point_name('Кутопьюган'))}
         
         CREATE (ObYarSale:Point {{id:{next_id()}, name:"Обь-Яр-Сале"}})
-        CREATE (ObKutopygan)-[:Path {{weight:0, traversal: "any"}}]->(ObYarSale)
-        CREATE (ObYarSale)-[:Path {{weight:0, traversal: "any"}}]->({point_name('Панаевск')})
-        CREATE (ObYarSale)-[:Path {{weight:0, traversal: "small"}}]->({point_name('Яр-Сале')})
+        {path_command('ObKutopygan', 'ObYarSale',)}
+        {path_command('ObYarSale', point_name('Панаевск'))}
+        {path_command('ObYarSale', point_name('Яр-Сале'), 'small')}
         
-        CREATE ({point_name('Кутопьюган')})-[:Path {{weight:0, traversal: "any"}}]->({point_name('Нори')})
+        {path_command(point_name('Кутопьюган'), point_name('Нори'))}
         
         CREATE (ObNyda:Point {{id:{next_id()}, name:"Обь-Ныда"}})
-        CREATE ({point_name('Нори')})-[:Path {{weight:0, traversal: "any"}}]->(ObNyda)
-        CREATE ({point_name('Кутопьюган')})-[:Path {{weight:0, traversal: "any"}}]->(ObNyda)
-        CREATE (ObNyda)-[:Path {{weight:0, traversal: "any"}}]->({point_name('Ныда')})
-        CREATE (ObNyda)-[:Path {{weight:0, traversal: "any"}}]->({point_name('Новый Порт')})
+        {path_command(point_name('Нори'), 'ObNyda')}
+        {path_command(point_name('Кутопьюган'), 'ObNyda')}
+        {path_command('ObNyda', point_name('Ныда'))}
+        {path_command('ObNyda', point_name('Новый Порт'))}
         
         CREATE (ObYarSale_2:Point {{id:{next_id()}, name:"Обь-Яр-Сале-2"}})
-        CREATE ({point_name('Яр-Сале')})-[:Path {{weight:0, traversal: "any"}}]->(ObYarSale_2)
-        CREATE (ObYarSale_2)-[:Path {{weight:0, traversal: "any"}}]->(ObNyda)
+        {path_command(point_name('Яр-Сале'), 'ObYarSale_2')}
+        {path_command('ObYarSale_2', 'ObNyda')}
         
-        CREATE ({point_name('Новый Порт')})-[:Path {{weight:0, traversal: "any"}}]->({point_name('Мыс Каменный')})
+        {path_command(point_name('Новый Порт'), point_name('Мыс Каменный'))}
         
         CREATE (ObAntipauta:Point {{id:{next_id()}, name:"Обь-Антипаюта"}})
-        CREATE ({point_name('Мыс Каменный')})-[:Path {{weight:0, traversal: "any"}}]->(ObAntipauta)
-        CREATE (ObAntipauta)-[:Path {{weight:0, traversal: "any"}}]->({point_name('Антипаюта')})
+        {path_command(point_name('Мыс Каменный'), 'ObAntipauta')}
+        {path_command('ObAntipauta', point_name('Антипаюта'))}
         
         CREATE (ObSeyaha:Point {{id:{next_id()}, name:"Обь-Се-Яха"}})
-        CREATE (ObAntipauta)-[:Path {{weight:0, traversal: "any"}}]->(ObSeyaha)
-        CREATE (ObSeyaha)-[:Path {{weight:0, traversal: "small"}}]->({point_name('Се-Яха')})
+        {path_command('ObAntipauta', 'ObSeyaha')}
+        {path_command('ObSeyaha', point_name('Се-Яха'), 'small')}
         
-        CREATE ({point_name('Антипаюта')})-[:Path {{weight:0, traversal: "small"}}]->({point_name('Находка')})
-        CREATE ({point_name('Находка')})-[:Path {{weight:0, traversal: "any"}}]->({point_name('Самбург')})
+        {path_command(point_name('Антипаюта'), point_name('Находка'), 'small')}
+        {path_command(point_name('Находка'), point_name('Самбург'))}
         """
         )
         return tx_return.single()

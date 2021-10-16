@@ -2,23 +2,11 @@ PYTHONPATH = PYTHONPATH=.
 
 # Executables
 PYTHON = $(PYTHONPATH) python3
-ALEMBIC = $(PYTHONPATH) alembic -c alembic.ini
-# Params
-DOWNGRADE_DEFAULT = -1
 
-.PHONY: run-script migrations db_upgrade db_downgrade pretty help
+.PHONY: run-script pretty help
 
 run-script:  ## Запустить скрипты
 	${PYTHON} -m scripts
-
-migrations:  ## Генерация файлов миграций по изменениям моделей БД
-	$(ALEMBIC) revision --autogenerate -m "$(message)"
-
-db_upgrade:  ## Запуск миграцийы схемы БД
-	$(ALEMBIC) upgrade head
-
-db_downgrade:  ## Даунгрейд миграций, по умолчанию - к предыдущей ревизии
-	$(ALEMBIC) downgrade $(DOWNGRADE_DEFAULT)
 
 pretty:  ## "Причесать" код - isort, black, пр.
 	poetry run isort .

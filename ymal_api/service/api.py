@@ -15,11 +15,6 @@ from domain.exceptions import DomainError
 from .schemas import ErrorResponse
 
 
-class FormedResponse(UJSONResponse):
-    def render(self, content: Any) -> bytes:
-        return super().render({"items": content})
-
-
 def make_app(*args: Any, **kwargs: Any) -> FastAPI:
     kwargs.setdefault("docs_url", "/api")
     kwargs.setdefault("debug", settings.DEBUG)
@@ -51,26 +46,26 @@ def set_middlewares(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     def type_error_handler(
         request: Request, exc: RequestValidationError
-    ) -> FormedResponse:
-        return FormedResponse(
+    ) -> UJSONResponse:
+        return UJSONResponse(
             status_code=422,
             content={"ok": False, "error": exc.errors()},
         )
 
     @app.exception_handler(DomainError)
-    def domain_error_handler(request: Request, exc: DomainError) -> FormedResponse:
-        return FormedResponse(
+    def domain_error_handler(request: Request, exc: DomainError) -> UJSONResponse:
+        return UJSONResponse(
             status_code=400,
             content={"ok": False, "error": exc.msg},
         )
 
     @app.exception_handler(Error)
-    def error_handler(request: Request, exc: Error) -> FormedResponse:
+    def error_handler(request: Request, exc: Error) -> UJSONResponse:
         return exc.render()
 
     @app.exception_handler(HTTPException)
-    def fastapi_error_handler(request: Request, exc: HTTPException) -> FormedResponse:
-        return FormedResponse(
+    def fastapi_error_handler(request: Request, exc: HTTPException) -> UJSONResponse:
+        return UJSONResponse(
             status_code=exc.status_code,
             content={"ok": False, "error": exc.detail},
             headers=exc.headers or {},
@@ -79,7 +74,7 @@ def set_middlewares(app: FastAPI) -> None:
     @app.middleware("http")
     async def catch_exceptions_middleware(
         request: Request, call_next: Callable[[Request], Any]
-    ) -> FormedResponse:
+    ) -> UJSONResponse:
         try:
             return await call_next(request)
         except Exception as exc:  # pylint: disable=broad-except
@@ -92,7 +87,7 @@ class Api(APIRouter):
         self, *args: Any, **kwargs: Any
     ) -> Callable[..., Any]:  # pylint: disable=W0221
         if type(kwargs["response_class"]) == DefaultPlaceholder:
-            kwargs["response_class"] = FormedResponse
+            kwargs["response_class"] = UJSONResponse
         return super().api_route(*args, **kwargs)
 
 
@@ -163,8 +158,8 @@ class Error(HTTPException):
             status_code=self.status_code, detail=self.error, headers=self.headers
         )
 
-    def render(self) -> FormedResponse:
-        return FormedResponse(
+    def render(self) -> UJSONResponse:
+        return UJSONResponse(
             status_code=self.status_code,
             content=ErrorResponse(error=self.error, error_code=self.error_code).dict(),
             headers=self.headers or {},
