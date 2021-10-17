@@ -405,7 +405,6 @@ async def calculate_paths(redis):
         sector_g = full_g.copy()
         sector_g.remove_nodes_from([*spine[:ind], *spine[ind + 1:]])
 
-        print(_graph_name(node_name), 'Sink')
         sector_dig.add_edge(_graph_name(node_name), 'Sink', cost=0)
         sector_dig.add_edge('Source', _graph_name(node_name), cost=0)
         sector_dig.nodes[_graph_name(node_name)]['name'] = node_name
@@ -423,15 +422,35 @@ async def calculate_paths(redis):
             sector_dig,
             load_capacity=small_fleet[0].capacity,
             num_vehicles=small_per_sector,
-            use_all_vehicles=True,
+            #use_all_vehicles=True,
         )
         cvrp_problem.solve(
             heuristic_only=True,
+            exact=False,
             time_limit=10
         )
 
         sector_routes = cvrp_problem.best_routes
 
+        orders = {}
 
+        for ind, route in sector_routes.items():
+            route = route[1:-1]
+            if route[0] == node_name:
+                route = route[1:]
+
+            prev = node_name
+            time = 0.0
+            commands = []
+            for cur in route:
+                n_name = sector_dig.nodes[cur]['name']
+                dist = nx.shortest_path_length(sector_g, prev, n_name, weight='weight')
+                time += float(dist) / float(small_fleet[0].speed)
+                commands.append(Order(location=n_name, action=Action.UNLOAD, time=time))
+                prev = n_name
+
+            orders[ind] = commands
+
+        return sector_routes, orders
         
     return solve_sector('Обь-Питляр')
