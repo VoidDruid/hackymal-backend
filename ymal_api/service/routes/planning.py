@@ -22,4 +22,4 @@ async def plan(redis: aioredis.Redis = Depends(get_redis)) -> Any:
             return await calculate_paths(redis)
         except:
             n += 1
-    raise RuntimeError('We are fucked')
+    raise RuntimeError("We are fucked")

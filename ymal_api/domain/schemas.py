@@ -57,10 +57,10 @@ class Ship(BaseModel):
 
 big_ship = lambda name: Ship(
     name=name, traversal_type=Traversal.ANY, capacity=2500, cargo=2500, speed=20
-)  # x8
+)
 small_ship = lambda name: Ship(
     name=name, traversal_type=Traversal.SMALL, capacity=1000, cargo=0, speed=25
-)  # x8
+)
 
 
 class Action(str, Enum):

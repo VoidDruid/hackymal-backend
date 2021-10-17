@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import csv
-import json
 import math
 import random
 import struct
@@ -25,62 +24,20 @@ START = "Обь-Лопхари"
 END = "Обь-Се-Яха"
 
 
-TOWNS_TO_COORDINATES = {
-    "Азовы": (0, 0),
-    "Аксарка": (0, 0),
-    "Антипаюта": (0, 0),
-    "Белоярск": (0, 0),
-    "Восяхово": (0, 0),
-    "Горки": (0, 0),
-    "Зеленый Яр": (0, 0),
-    "Катравож": (0, 0),
-    "Кутопьюган": (0, 0),
-    "Лабытнанги": (0, 0),
-    "Лопхари": (0, 0),
-    "Мужи": (0, 0),
-    "Мыс Каменный": (0, 0),
-    "Находка": (0, 0),
-    "Новый Порт": (0, 0),
-    "Нори": (0, 0),
-    "Ныда": (0, 0),
-    "Обь-Антипаюта": (0, 0),
-    "Обь-Белоярск": (0, 0),
-    "Обь-Белоярск 2": (0, 0),
-    "Обь-Восяхово": (0, 0),
-    "Обь-Катравож": (0, 0),
-    "Обь-Кутопьюган": (0, 0),
-    "Обь-Лопхари": (0, 0),
-    "Обь-Мужи": (0, 0),
-    "Обь-Ныда": (0, 0),
-    "Обь-Питляр": (0, 0),
-    "Обь-Се-Яха": (0, 0),
-    "Обь-Яр-Сале": (0, 0),
-    "Обь-Яр-Сале-2": (0, 0),
-    "Овгорт": (0, 0),
-    "Панаевск": (0, 0),
-    "Питляр": (0, 0),
-    "Салемал": (0, 0),
-    "Салехард": (0, 0),
-    "Самбург": (0, 0),
-    "Се-Яха": (0, 0),
-    "Харсайм": (0, 0),
-    "Шурышкары": (0, 0),
-    "Щучье": (0, 0),
-    "Яр-Сале": (0, 0),
-}
+TOWNS_TO_COORDINATES = {}
 
 
 with open("/etc/gis/points.csv", newline="") as matrix_csv:
     reader = csv.DictReader(matrix_csv)
     for row in reader:
-        name = row['name']
-        coord = (row['Y'], row['X'])
+        name = row["name"]
+        coord = (row["Y"], row["X"])
         TOWNS_TO_COORDINATES[name] = coord
 
 
 def to_coordinates(location):
     coor = TOWNS_TO_COORDINATES[location]
-    return {'lat': coor[0], 'lon': coor[1]}
+    return {"lat": coor[0], "lon": coor[1]}
 
 
 class GraphSpec:
@@ -112,30 +69,7 @@ async def get_demands():
     return demand
 
 
-SHIP_NAMES = [
-    "Пойма",
-    "СТГН-12",
-    "СТГН-14",
-    "Наливная-2406",
-    "Скала-3",
-    "Заструга-1",
-    "Шуга",
-    "Пойма-2",
-    "НС-1005",
-    "Старица-2",
-    "СТГН-13",
-    "ГНБ-209",
-    "Северянин",
-    ""
-    "Скала",
-    "ГНБ-210",
-    "ГНБ-220",
-    "Протока",
-    "Дунай",
-    "Алдан",
-    "Ак. Сахаров",
-    "Ямал",
-]
+SHIP_NAMES = []
 
 
 async def get_fleet():
@@ -500,7 +434,7 @@ async def calculate_paths(redis):
     orders = defaultdict(lambda: defaultdict(list))
     for ind, big_orders_list in enumerate(big_orders.values()):
         big_ship_o = big_ship(random.choice(SHIP_NAMES))
-        orders[big_ship_o.name] = {'orders': big_orders_list, 'ship': big_ship_o.dict()}
+        orders[big_ship_o.name] = {"orders": big_orders_list, "ship": big_ship_o.dict()}
         small_ships = [small_ship(random.choice(SHIP_NAMES)) for _ in range(5)]
         for order in big_orders_list:
             if spine_g.nodes[order.location]["traversal"] == 0:
@@ -514,20 +448,19 @@ async def calculate_paths(redis):
                 for small_order in small_orders:
                     small_order.time += timeshift
                 small_ship_o = small_ships[small_ind]
-                orders[small_ship_o.name]['ship'] = small_ship_o.dict()
-                orders[small_ship_o.name]['orders'].append(order)
-                orders[small_ship_o.name]['orders'].extend(small_orders)
-
+                orders[small_ship_o.name]["ship"] = small_ship_o.dict()
+                orders[small_ship_o.name]["orders"].append(order)
+                orders[small_ship_o.name]["orders"].extend(small_orders)
 
     for ship_order in orders.values():
-        ship_order['orders'].sort(key=lambda ord: ord.time)
+        ship_order["orders"].sort(key=lambda ord: ord.time)
         to_drop = []
-        for i, order in enumerate(ship_order['orders']):
+        for i, order in enumerate(ship_order["orders"]):
             order.coordinates = to_coordinates(order.location)
-            if (i + 1) < len(ship_order['orders']):
-                if order.location == ship_order['orders'][i + 1].location:
+            if (i + 1) < len(ship_order["orders"]):
+                if order.location == ship_order["orders"][i + 1].location:
                     to_drop.append(i + 1)
         for dr in to_drop:
-            ship_order['orders'].pop(dr)
+            ship_order["orders"].pop(dr)
 
     return orders
