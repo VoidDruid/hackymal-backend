@@ -1,5 +1,7 @@
 import asyncio
 import base64
+import csv
+import json
 import math
 import random
 import struct
@@ -16,11 +18,69 @@ from neo4j import Transaction
 from dataplane import neo4j
 
 from .consts import GRAPH_CACHE_KEY, GRAPH_MATRIX_CACHE_KEY, GRAPH_TTL
-from .schemas import Resource, Order, big_ship, small_ship, Action
+from .schemas import Action, Order, Resource, big_ship, small_ship
 
 
 START = "Обь-Лопхари"
 END = "Обь-Се-Яха"
+
+
+TOWNS_TO_COORDINATES = {
+    "Азовы": (0, 0),
+    "Аксарка": (0, 0),
+    "Антипаюта": (0, 0),
+    "Белоярск": (0, 0),
+    "Восяхово": (0, 0),
+    "Горки": (0, 0),
+    "Зеленый Яр": (0, 0),
+    "Катравож": (0, 0),
+    "Кутопьюган": (0, 0),
+    "Лабытнанги": (0, 0),
+    "Лопхари": (0, 0),
+    "Мужи": (0, 0),
+    "Мыс Каменный": (0, 0),
+    "Находка": (0, 0),
+    "Новый Порт": (0, 0),
+    "Нори": (0, 0),
+    "Ныда": (0, 0),
+    "Обь-Антипаюта": (0, 0),
+    "Обь-Белоярск": (0, 0),
+    "Обь-Белоярск 2": (0, 0),
+    "Обь-Восяхово": (0, 0),
+    "Обь-Катравож": (0, 0),
+    "Обь-Кутопьюган": (0, 0),
+    "Обь-Лопхари": (0, 0),
+    "Обь-Мужи": (0, 0),
+    "Обь-Ныда": (0, 0),
+    "Обь-Питляр": (0, 0),
+    "Обь-Се-Яха": (0, 0),
+    "Обь-Яр-Сале": (0, 0),
+    "Обь-Яр-Сале-2": (0, 0),
+    "Овгорт": (0, 0),
+    "Панаевск": (0, 0),
+    "Питляр": (0, 0),
+    "Салемал": (0, 0),
+    "Салехард": (0, 0),
+    "Самбург": (0, 0),
+    "Се-Яха": (0, 0),
+    "Харсайм": (0, 0),
+    "Шурышкары": (0, 0),
+    "Щучье": (0, 0),
+    "Яр-Сале": (0, 0),
+}
+
+
+with open("/etc/gis/points.csv", newline="") as matrix_csv:
+    reader = csv.DictReader(matrix_csv)
+    for row in reader:
+        name = row['name']
+        coord = (row['Y'], row['X'])
+        TOWNS_TO_COORDINATES[name] = coord
+
+
+def to_coordinates(location):
+    coor = TOWNS_TO_COORDINATES[location]
+    return {'lat': coor[0], 'lon': coor[1]}
 
 
 class GraphSpec:
@@ -32,54 +92,12 @@ class GraphSpec:
 
 
 async def get_demands():
-    towns = [
-        "Азовы",
-        "Аксарка",
-        "Антипаюта",
-        "Белоярск",
-        "Восяхово",
-        "Горки",
-        "Зеленый Яр",
-        "Катравож",
-        "Кутопьюган",
-        "Лабытнанги",
-        "Лопхари",
-        "Мужи",
-        "Мыс Каменный",
-        "Находка",
-        "Новый Порт",
-        "Нори",
-        "Ныда",
-        "Обь-Антипаюта",
-        "Обь-Белоярск",
-        "Обь-Белоярск 2",
-        "Обь-Восяхово",
-        "Обь-Катравож",
-        "Обь-Кутопьюган",
-        "Обь-Лопхари",
-        "Обь-Мужи",
-        "Обь-Ныда",
-        "Обь-Питляр",
-        "Обь-Се-Яха",
-        "Обь-Яр-Сале",
-        "Обь-Яр-Сале-2",
-        "Овгорт",
-        "Панаевск",
-        "Питляр",
-        "Салемал",
-        "Салехард",
-        "Самбург",
-        "Се-Яха",
-        "Харсайм",
-        "Шурышкары",
-        "Щучье",
-        "Яр-Сале",
-    ]
+
     low_end = 25
     high_end = 600
     k = 3
     demand = {}
-    for town in towns:
+    for town in TOWNS_TO_COORDINATES.keys():
         town_demand = {}
         for _ in range(random.randint(0, 2)):
             resource = random.choice(list(Resource))
@@ -94,33 +112,43 @@ async def get_demands():
     return demand
 
 
+SHIP_NAMES = [
+    "Пойма",
+    "СТГН-12",
+    "СТГН-14",
+    "Наливная-2406",
+    "Скала-3",
+    "Заструга-1",
+    "Шуга",
+    "Пойма-2",
+    "НС-1005",
+    "Старица-2",
+    "СТГН-13",
+    "ГНБ-209",
+    "Северянин",
+    ""
+    "Скала",
+    "ГНБ-210",
+    "ГНБ-220",
+    "Протока",
+    "Дунай",
+    "Алдан",
+    "Ак. Сахаров",
+    "Ямал",
+]
+
+
 async def get_fleet():
-    names = [
-        "Пойма",
-        "СТГН-12",
-        "СТГН-14",
-        "Наливная-2406",
-        "Скала-3",
-        "Заструга-1",
-        "Шуга",
-        "Пойма-2",
-        "НС-1005",
-        "Старица-2",
-        "ГНБ-209",
-        "Скала",
-        "ГНБ-210",
-        "Протока",
-        "Дунай",
-        "Алдан",
-    ]
     i = -1
 
     def next_name():
         nonlocal i
         i += 1
-        return names[i]
+        return SHIP_NAMES[i]
 
-    return [big_ship(next_name()) for _ in range(6)], [small_ship(next_name()) for _ in range(10)]
+    return [big_ship(next_name()) for _ in range(6)], [
+        small_ship(next_name()) for _ in range(12)
+    ]
 
 
 async def get_supply():
@@ -280,8 +308,8 @@ async def calculate_paths(redis):
 
     full_g, full_matrix = await get_graph(redis, FullGraph)
     for node in full_g.nodes:
-        demand = sum(demands.get(node, {'_': 0}).values())
-        full_g.nodes[node]['demand'] = demand
+        demand = sum(demands.get(node, {"_": 0}).values())
+        full_g.nodes[node]["demand"] = demand
 
     any_g, any_matrix = await get_graph(redis, AnyTraversalGraph)
 
@@ -340,28 +368,31 @@ async def calculate_paths(redis):
         "abvgdeejzijklmnoprstufhzcss_y_euaABVGDEEJZIJKLMNOPRSTUFHZCSS_Y_EUA",
     )
     tr = {ord(a): ord(b) for a, b in zip(*SYMBOLS)}
+
     def _graph_name(name: str):
-        return name.translate(tr).replace("-", "").replace(" ", "").replace('_', '')
+        return name.translate(tr).replace("-", "").replace(" ", "").replace("_", "")
 
     def add_edges(topo, prev):
         nonlocal spine_dig
 
         for cur in topo:
-            if prev == 'Source' or cur == 'Sink' or cur == 'Source' or prev == 'Sink':
+            if prev == "Source" or cur == "Sink" or cur == "Source" or prev == "Sink":
                 cost = 0
             else:
-                cost = spine_g[prev][cur]['weight']
+                cost = spine_g[prev][cur]["weight"]
 
-            if cur != 'Source' and prev != 'Sink':
+            if cur != "Source" and prev != "Sink":
                 spine_dig.add_edge(_graph_name(prev), _graph_name(cur), cost=cost)
-            if cur not in ('Source', 'Sink'):
-                spine_dig.nodes[_graph_name(cur)]['demand'] = spine_g.nodes[cur]['demand']
-                spine_dig.nodes[_graph_name(cur)]['name'] = cur
+            if cur not in ("Source", "Sink"):
+                spine_dig.nodes[_graph_name(cur)]["demand"] = spine_g.nodes[cur][
+                    "demand"
+                ]
+                spine_dig.nodes[_graph_name(cur)]["name"] = cur
 
             prev = cur
 
-    add_edges((*topology, 'Sink'), 'Source')
-    add_edges(['Source', *topology][::-1], 'Sink')
+    add_edges((*topology, "Sink"), "Source")
+    add_edges(["Source", *topology][::-1], "Sink")
 
     cvrp_problem = vrpy.VehicleRoutingProblem(
         spine_dig,
@@ -369,66 +400,78 @@ async def calculate_paths(redis):
         num_vehicles=len(big_fleet),
         use_all_vehicles=True,
     )
-    cvrp_problem.solve(
-        heuristic_only=True,
-        time_limit=30
-    )
+    cvrp_problem.solve(heuristic_only=True, time_limit=30)
     routes = cvrp_problem.best_routes
 
-    longest_route = max([len(v) for v in routes.values()])
-    for route in routes.values():
-        len_route = len(route)
-        if len_route >= longest_route:
-            continue
-        route.extend([None] * (longest_route - len_route))
-
-    destinations_lists = list(zip(*routes.values()))[1:]
-
-    max_unloading = 0
-    for destinations in destinations_lists:
-        unloading = 0
-        for destination in destinations:
-            if destination in ('Sink', 'Source', None):
+    have_sectors = 0
+    big_orders = defaultdict(list)
+    for ind, route in routes.items():
+        has_sectors = False
+        time = 0.0
+        route = route[1:]
+        prev = spine_dig.nodes[route[0]]["name"]
+        if prev != START:
+            dist = nx.shortest_path_length(spine_g, START, prev, weight="weight")
+            time += float(dist) / float(big_fleet[0].speed)
+        for node_n in route:
+            if node_n == "Sink":
                 continue
-            name = spine_dig.nodes[destination]['name']
-            if spine_g.nodes[name]['traversal'] != 0:
-                unloading += 1
+            cur = spine_dig.nodes[node_n]["name"]
+            traversal = spine_g.nodes[cur]["traversal"]
+            dist = nx.shortest_path_length(spine_g, prev, cur, weight="weight")
+            time += float(dist) / float(big_fleet[0].speed)
 
-        if unloading > max_unloading:
-            max_unloading = unloading
+            if traversal == 0:
+                action = Action.UNLOAD
+            else:
+                action = Action.WAIT
+                has_sectors = True
 
-    small_per_sector = len(small_fleet) // max_unloading
+            big_orders[ind].append(Order(location=cur, action=action, time=time))
+            prev = cur
+
+        if has_sectors:
+            have_sectors += 1
+
+    small_per_sector = len(small_fleet) // have_sectors
 
     def solve_sector(node_name):
         ind = spine.index(node_name)
         sector_dig = nx.DiGraph()
         sector_g = full_g.copy()
-        sector_g.remove_nodes_from([*spine[:ind], *spine[ind + 1:]])
+        sector_g.remove_nodes_from([*spine[:ind], *spine[ind + 1 :]])
 
-        sector_dig.add_edge(_graph_name(node_name), 'Sink', cost=0)
-        sector_dig.add_edge('Source', _graph_name(node_name), cost=0)
-        sector_dig.nodes[_graph_name(node_name)]['name'] = node_name
+        sector_dig.add_edge(_graph_name(node_name), "Sink", cost=0)
+        sector_dig.add_edge("Source", _graph_name(node_name), cost=0)
+        sector_dig.nodes[_graph_name(node_name)]["name"] = node_name
 
         for edge in nx.dfs_edges(sector_g, node_name):
-            sector_dig.add_edge(_graph_name(edge[0]), _graph_name(edge[1]), cost=sector_g[edge[0]][edge[1]]['weight'])
-            sector_dig.add_edge(_graph_name(edge[1]), _graph_name(edge[0]), cost=sector_g[edge[0]][edge[1]]['weight'])
-            sector_dig.nodes[_graph_name(edge[0])]['demand'] = sector_g.nodes[edge[0]]['demand']
-            sector_dig.nodes[_graph_name(edge[1])]['demand'] = sector_g.nodes[edge[1]]['demand']
-            sector_dig.nodes[_graph_name(edge[0])]['name'] = edge[0]
-            sector_dig.nodes[_graph_name(edge[1])]['name'] = edge[1]
-
+            sector_dig.add_edge(
+                _graph_name(edge[0]),
+                _graph_name(edge[1]),
+                cost=sector_g[edge[0]][edge[1]]["weight"],
+            )
+            sector_dig.add_edge(
+                _graph_name(edge[1]),
+                _graph_name(edge[0]),
+                cost=sector_g[edge[0]][edge[1]]["weight"],
+            )
+            sector_dig.nodes[_graph_name(edge[0])]["demand"] = sector_g.nodes[edge[0]][
+                "demand"
+            ]
+            sector_dig.nodes[_graph_name(edge[1])]["demand"] = sector_g.nodes[edge[1]][
+                "demand"
+            ]
+            sector_dig.nodes[_graph_name(edge[0])]["name"] = edge[0]
+            sector_dig.nodes[_graph_name(edge[1])]["name"] = edge[1]
 
         cvrp_problem = vrpy.VehicleRoutingProblem(
             sector_dig,
             load_capacity=small_fleet[0].capacity,
             num_vehicles=small_per_sector,
-            #use_all_vehicles=True,
+            # use_all_vehicles=True,
         )
-        cvrp_problem.solve(
-            heuristic_only=True,
-            exact=False,
-            time_limit=10
-        )
+        cvrp_problem.solve(heuristic_only=True, time_limit=10)
 
         sector_routes = cvrp_problem.best_routes
 
@@ -443,8 +486,8 @@ async def calculate_paths(redis):
             time = 0.0
             commands = []
             for cur in route:
-                n_name = sector_dig.nodes[cur]['name']
-                dist = nx.shortest_path_length(sector_g, prev, n_name, weight='weight')
+                n_name = sector_dig.nodes[cur]["name"]
+                dist = nx.shortest_path_length(sector_g, prev, n_name, weight="weight")
                 time += float(dist) / float(small_fleet[0].speed)
                 commands.append(Order(location=n_name, action=Action.UNLOAD, time=time))
                 prev = n_name
@@ -452,5 +495,39 @@ async def calculate_paths(redis):
             orders[ind] = commands
 
         return sector_routes, orders
-        
-    return solve_sector('Обь-Питляр')
+
+    small_fleet_backlog = small_fleet.copy()
+    orders = defaultdict(lambda: defaultdict(list))
+    for ind, big_orders_list in enumerate(big_orders.values()):
+        big_ship_o = big_ship(random.choice(SHIP_NAMES))
+        orders[big_ship_o.name] = {'orders': big_orders_list, 'ship': big_ship_o.dict()}
+        small_ships = [small_ship(random.choice(SHIP_NAMES)) for _ in range(5)]
+        for order in big_orders_list:
+            if spine_g.nodes[order.location]["traversal"] == 0:
+                continue
+            sector = order.location
+            timeshift = order.time
+
+            _, sector_orders = solve_sector(sector)
+
+            for small_ind, small_orders in enumerate(sector_orders.values()):
+                for small_order in small_orders:
+                    small_order.time += timeshift
+                small_ship_o = small_ships[small_ind]
+                orders[small_ship_o.name]['ship'] = small_ship_o.dict()
+                orders[small_ship_o.name]['orders'].append(order)
+                orders[small_ship_o.name]['orders'].extend(small_orders)
+
+
+    for ship_order in orders.values():
+        ship_order['orders'].sort(key=lambda ord: ord.time)
+        to_drop = []
+        for i, order in enumerate(ship_order['orders']):
+            order.coordinates = to_coordinates(order.location)
+            if (i + 1) < len(ship_order['orders']):
+                if order.location == ship_order['orders'][i + 1].location:
+                    to_drop.append(i + 1)
+        for dr in to_drop:
+            ship_order['orders'].pop(dr)
+
+    return orders

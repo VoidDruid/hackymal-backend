@@ -4,7 +4,7 @@ from common.logger import init_logger
 from settings import settings
 
 from .api import Api, make_app
-from .routes import temp_api
+from .routes import planning_api
 
 
 app = make_app()
@@ -19,7 +19,7 @@ if not settings.DEBUG:
     )
 
 api_v1 = Api()
-api_v1.include_router(temp_api, prefix="/temp")
+api_v1.include_router(planning_api, prefix="/planning")
 
 
 @app.get("/healthz", tags=["health check"])

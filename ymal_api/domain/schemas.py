@@ -51,6 +51,9 @@ class Ship(BaseModel):
     speed: float = 22  # km/h
     transfer_speed: float = 30  # tons/hour
 
+    def __hash__(self):
+        return hash(self.name)
+
 
 big_ship = lambda name: Ship(
     name=name, traversal_type=Traversal.ANY, capacity=2500, cargo=2500, speed=20
@@ -67,6 +70,7 @@ class Action(str, Enum):
 
 
 class Order(BaseModel):
+    coordinates: dict = {}
     location: str
     action: Action
-    time: int  # hour from the start of calculation
+    time: float  # hour from the start of calculation
