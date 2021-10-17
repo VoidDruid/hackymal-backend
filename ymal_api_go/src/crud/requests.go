@@ -8,6 +8,7 @@ import (
     "go.mongodb.org/mongo-driver/bson/primitive"
     "go.mongodb.org/mongo-driver/mongo"
     "log"
+    "math/rand"
     "time"
     "ymal-api-go/database"
     "ymal-api-go/models"
@@ -28,6 +29,116 @@ func FromRequestPostToRequest(reqPost *models.RequestPost) (req models.Request, 
         t.Day(), t.Month(), t.Year())
     return
 }
+
+func FloodDB(city string) {
+    db := database.GetMongo()
+    requests := db.Database("ymal").Collection("requests")
+    requests.Drop(context.TODO())
+
+    rand.Seed(time.Now().Unix())
+    types := make([]string, 0, 5)
+    types = append(types, models.RequestTypeAI92K5)
+    types = append(types, models.RequestTypeDTAGOST)
+    types = append(types, models.RequestTypeDTATU)
+    types = append(types, models.RequestTypeDTLGOST)
+    types = append(types, models.RequestTypeDTZGOST)
+
+    // 2020
+    for i:= 0; i < 25; i++ {
+        var req models.RequestPost
+        req.Type = new(string)
+        *req.Type = types[rand.Intn(len(types))]
+        req.City = new(string)
+        *req.City = city
+        req.Amount = new(uint)
+        *req.Amount = uint(rand.Intn(100000))
+        req.Date = new(string)
+        t := time.Now()
+        date := fmt.Sprintf("%02d.%02d.%d",
+            t.Day() - 10, t.Month(), t.Year()-1)
+        *req.Date = date
+        CreateRequestInDB(&req)
+    }
+    for i:= 0; i < 25; i++ {
+        var req models.RequestPost
+        req.Type = new(string)
+        *req.Type = types[rand.Intn(len(types))]
+        req.City = new(string)
+        *req.City = city
+        req.Amount = new(uint)
+        *req.Amount = uint(rand.Intn(100000))
+        req.Date = new(string)
+        t := time.Now()
+        date := fmt.Sprintf("%02d.%02d.%d",
+            t.Day(), t.Month(), t.Year()-1)
+        *req.Date = date
+        CreateRequestInDB(&req)
+    }
+
+    for i:= 0; i < 25; i++ {
+        var req models.RequestPost
+        req.Type = new(string)
+        *req.Type = types[rand.Intn(len(types))]
+        req.City = new(string)
+        *req.City = city
+        req.Amount = new(uint)
+        *req.Amount = uint(rand.Intn(100000))
+        req.Date = new(string)
+        t := time.Now()
+        date := fmt.Sprintf("%02d.%02d.%d",
+            t.Day()+5, t.Month(), t.Year()-1)
+        *req.Date = date
+        CreateRequestInDB(&req)
+    }
+    // 2021
+    for i:= 0; i < 25; i++ {
+        var req models.RequestPost
+        req.Type = new(string)
+        *req.Type = types[rand.Intn(len(types))]
+        req.City = new(string)
+        *req.City = city
+        req.Amount = new(uint)
+        *req.Amount = uint(rand.Intn(100000))
+        req.Date = new(string)
+        t := time.Now()
+        date := fmt.Sprintf("%02d.%02d.%d",
+            t.Day() - 10, t.Month(), t.Year())
+        *req.Date = date
+        CreateRequestInDB(&req)
+    }
+    for i:= 0; i < 25; i++ {
+        var req models.RequestPost
+        req.Type = new(string)
+        *req.Type = types[rand.Intn(len(types))]
+        req.City = new(string)
+        *req.City = city
+        req.Amount = new(uint)
+        *req.Amount = uint(rand.Intn(100000))
+        req.Date = new(string)
+        t := time.Now()
+        date := fmt.Sprintf("%02d.%02d.%d",
+            t.Day(), t.Month(), t.Year())
+        *req.Date = date
+        CreateRequestInDB(&req)
+    }
+
+    for i:= 0; i < 25; i++ {
+        var req models.RequestPost
+        req.Type = new(string)
+        *req.Type = types[rand.Intn(len(types))]
+        req.City = new(string)
+        *req.City = city
+        req.Amount = new(uint)
+        *req.Amount = uint(rand.Intn(100000))
+        req.Date = new(string)
+        t := time.Now()
+        date := fmt.Sprintf("%02d.%02d.%d",
+            t.Day()+5, t.Month(), t.Year())
+        *req.Date = date
+        CreateRequestInDB(&req)
+    }
+}
+
 
 func CreateRequestInDB(reqPost *models.RequestPost) (req models.Request, err error) {
     if reqPost == nil || reqPost.Type == nil || reqPost.Amount == nil || reqPost.City == nil {

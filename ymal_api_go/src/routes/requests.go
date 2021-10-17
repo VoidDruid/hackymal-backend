@@ -197,3 +197,14 @@ func GetRequestStatistics(w http.ResponseWriter, r *http.Request) {
     combinedStat := buildStats(&requests)
     _ = json.NewEncoder(w).Encode(combinedStat)
 }
+
+func FloodDB(w http.ResponseWriter, r *http.Request) {
+    if r.URL.Query().Has("city") == false {
+        w.WriteHeader(400)
+        _ = json.NewEncoder(w).Encode(models.ErrorResult{Description:"empty city query parameter"})
+        return
+    }
+
+    city := r.URL.Query().Get("city")
+    crud.FloodDB(city)
+}
