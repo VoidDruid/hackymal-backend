@@ -76,7 +76,7 @@ async def get_demands():
         "Яр-Сале",
     ]
     low_end = 25
-    high_end = 1000
+    high_end = 600
     k = 3
     demand = {}
     for town in towns:
@@ -97,17 +97,17 @@ async def get_demands():
 async def get_fleet():
     names = [
         "Пойма",
-        "Пойма-2",
         "СТГН-12",
         "СТГН-14",
         "Наливная-2406",
         "Скала-3",
-        "Скала",
         "Заструга-1",
         "Шуга",
+        "Пойма-2",
         "НС-1005",
         "Старица-2",
         "ГНБ-209",
+        "Скала",
         "ГНБ-210",
         "Протока",
         "Дунай",
@@ -120,7 +120,7 @@ async def get_fleet():
         i += 1
         return names[i]
 
-    return [big_ship(next_name()) for _ in range(8)], [small_ship(next_name()) for _ in range(8)] * 8
+    return [big_ship(next_name()) for _ in range(6)], [small_ship(next_name()) for _ in range(10)]
 
 
 async def get_supply():
@@ -279,6 +279,10 @@ async def calculate_paths(redis):
     big_fleet, small_fleet = await get_fleet()
 
     full_g, full_matrix = await get_graph(redis, FullGraph)
+    for node in full_g.nodes:
+        demand = sum(demands.get(node, {'_': 0}).values())
+        full_g.nodes[node]['demand'] = demand
+
     any_g, any_matrix = await get_graph(redis, AnyTraversalGraph)
 
     spine = nx.shortest_path(any_g, START, END, weight="weight")
@@ -352,12 +356,82 @@ async def calculate_paths(redis):
                 spine_dig.add_edge(_graph_name(prev), _graph_name(cur), cost=cost)
             if cur not in ('Source', 'Sink'):
                 spine_dig.nodes[_graph_name(cur)]['demand'] = spine_g.nodes[cur]['demand']
+                spine_dig.nodes[_graph_name(cur)]['name'] = cur
 
             prev = cur
 
     add_edges((*topology, 'Sink'), 'Source')
     add_edges(['Source', *topology][::-1], 'Sink')
 
-    cvrp_problem = vrpy.VehicleRoutingProblem(spine_dig, load_capacity=big_fleet[0].capacity, num_vehicles=len(big_fleet))
-    cvrp_problem.solve()
-    return cvrp_problem.best_routes
+    cvrp_problem = vrpy.VehicleRoutingProblem(
+        spine_dig,
+        load_capacity=big_fleet[0].capacity,
+        num_vehicles=len(big_fleet),
+        use_all_vehicles=True,
+    )
+    cvrp_problem.solve(
+        heuristic_only=True,
+        time_limit=30
+    )
+    routes = cvrp_problem.best_routes
+
+    longest_route = max([len(v) for v in routes.values()])
+    for route in routes.values():
+        len_route = len(route)
+        if len_route >= longest_route:
+            continue
+        route.extend([None] * (longest_route - len_route))
+
+    destinations_lists = list(zip(*routes.values()))[1:]
+
+    max_unloading = 0
+    for destinations in destinations_lists:
+        unloading = 0
+        for destination in destinations:
+            if destination in ('Sink', 'Source', None):
+                continue
+            name = spine_dig.nodes[destination]['name']
+            if spine_g.nodes[name]['traversal'] != 0:
+                unloading += 1
+
+        if unloading > max_unloading:
+            max_unloading = unloading
+
+    small_per_sector = len(small_fleet) // max_unloading
+
+    def solve_sector(node_name):
+        ind = spine.index(node_name)
+        sector_dig = nx.DiGraph()
+        sector_g = full_g.copy()
+        sector_g.remove_nodes_from([*spine[:ind], *spine[ind + 1:]])
+
+        print(_graph_name(node_name), 'Sink')
+        sector_dig.add_edge(_graph_name(node_name), 'Sink', cost=0)
+        sector_dig.add_edge('Source', _graph_name(node_name), cost=0)
+        sector_dig.nodes[_graph_name(node_name)]['name'] = node_name
+
+        for edge in nx.dfs_edges(sector_g, node_name):
+            sector_dig.add_edge(_graph_name(edge[0]), _graph_name(edge[1]), cost=sector_g[edge[0]][edge[1]]['weight'])
+            sector_dig.add_edge(_graph_name(edge[1]), _graph_name(edge[0]), cost=sector_g[edge[0]][edge[1]]['weight'])
+            sector_dig.nodes[_graph_name(edge[0])]['demand'] = sector_g.nodes[edge[0]]['demand']
+            sector_dig.nodes[_graph_name(edge[1])]['demand'] = sector_g.nodes[edge[1]]['demand']
+            sector_dig.nodes[_graph_name(edge[0])]['name'] = edge[0]
+            sector_dig.nodes[_graph_name(edge[1])]['name'] = edge[1]
+
+
+        cvrp_problem = vrpy.VehicleRoutingProblem(
+            sector_dig,
+            load_capacity=small_fleet[0].capacity,
+            num_vehicles=small_per_sector,
+            use_all_vehicles=True,
+        )
+        cvrp_problem.solve(
+            heuristic_only=True,
+            time_limit=10
+        )
+
+        sector_routes = cvrp_problem.best_routes
+
+
+        
+    return solve_sector('Обь-Питляр')
