@@ -31,3 +31,18 @@ type RequestPost struct {
     Amount *uint `json:"amount"`
     City *string `json:"city"`
 }
+
+type RequestStatItem struct {
+    Volume uint `json:"volume"`
+    Type string `json:"type"`
+}
+
+type RequestStat struct {
+    Label string `json:"label"`
+    Items []RequestStatItem `json:"items"`
+}
+
+type RequestStatCombined struct {
+    CurrentYear RequestStat `json:"current_year"`
+    PreviousYear RequestStat `json:"previous_year"`
+}
