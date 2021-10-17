@@ -1,28 +1,129 @@
 import asyncio
 import base64
+import math
+import random
+import struct
+from collections import defaultdict
 from functools import lru_cache
+from typing import Tuple, Type
 
 import aioredis
 import networkx as nx
 import numpy as np
-import struct
+import vrpy
 from neo4j import Transaction
-from typing import Tuple
 
 from dataplane import neo4j
 
-from .consts import GRAPH_CACHE_KEY, GRAPH_TTL, GRAPH_MATRIX_CACHE_KEY
+from .consts import GRAPH_CACHE_KEY, GRAPH_MATRIX_CACHE_KEY, GRAPH_TTL
+from .schemas import Resource, Order, big_ship, small_ship, Action
+
+
+START = "Обь-Лопхари"
+END = "Обь-Се-Яха"
+
+
+class GraphSpec:
+    name: str
+
+    @staticmethod
+    def q(tx: Transaction):
+        pass
 
 
 async def get_demands():
-    pass
-
-
-async def get_supply():
-    pass
+    towns = [
+        "Азовы",
+        "Аксарка",
+        "Антипаюта",
+        "Белоярск",
+        "Восяхово",
+        "Горки",
+        "Зеленый Яр",
+        "Катравож",
+        "Кутопьюган",
+        "Лабытнанги",
+        "Лопхари",
+        "Мужи",
+        "Мыс Каменный",
+        "Находка",
+        "Новый Порт",
+        "Нори",
+        "Ныда",
+        "Обь-Антипаюта",
+        "Обь-Белоярск",
+        "Обь-Белоярск 2",
+        "Обь-Восяхово",
+        "Обь-Катравож",
+        "Обь-Кутопьюган",
+        "Обь-Лопхари",
+        "Обь-Мужи",
+        "Обь-Ныда",
+        "Обь-Питляр",
+        "Обь-Се-Яха",
+        "Обь-Яр-Сале",
+        "Обь-Яр-Сале-2",
+        "Овгорт",
+        "Панаевск",
+        "Питляр",
+        "Салемал",
+        "Салехард",
+        "Самбург",
+        "Се-Яха",
+        "Харсайм",
+        "Шурышкары",
+        "Щучье",
+        "Яр-Сале",
+    ]
+    low_end = 25
+    high_end = 1000
+    k = 3
+    demand = {}
+    for town in towns:
+        town_demand = {}
+        for _ in range(random.randint(0, 2)):
+            resource = random.choice(list(Resource))
+            amount = int(
+                math.floor(
+                    low_end
+                    + (high_end - low_end + 1) * (1.0 - random.random() ** (1.0 / k))
+                )
+            )
+            town_demand[resource] = amount
+        demand[town] = town_demand
+    return demand
 
 
 async def get_fleet():
+    names = [
+        "Пойма",
+        "Пойма-2",
+        "СТГН-12",
+        "СТГН-14",
+        "Наливная-2406",
+        "Скала-3",
+        "Скала",
+        "Заструга-1",
+        "Шуга",
+        "НС-1005",
+        "Старица-2",
+        "ГНБ-209",
+        "ГНБ-210",
+        "Протока",
+        "Дунай",
+        "Алдан",
+    ]
+    i = -1
+
+    def next_name():
+        nonlocal i
+        i += 1
+        return names[i]
+
+    return [big_ship(next_name()) for _ in range(8)], [small_ship(next_name()) for _ in range(8)] * 8
+
+
+async def get_supply():
     pass
 
 
@@ -45,38 +146,57 @@ def index_to_node(G, ind):
 
 def ndarray_pack(array):
     h, w = array.shape
-    shape = struct.pack('>II', h, w)
+    shape = struct.pack(">II", h, w)
     return shape + array.tobytes()
 
 
 def ndarray_unpack(encoded):
-    h, w = struct.unpack('>II', encoded[:8])
-    return np.frombuffer(encoded[8:]).reshape(h,w)
+    h, w = struct.unpack(">II", encoded[:8])
+    return np.frombuffer(encoded[8:]).reshape(h, w)
 
 
-async def invalidate_graph(redis: aioredis.Redis):
-    await redis.delete(GRAPH_CACHE_KEY, GRAPH_MATRIX_CACHE_KEY)
+def g_cache_key(name: str):
+    return GRAPH_CACHE_KEY + "_" + name
 
 
-async def get_graph(redis: aioredis.Redis) -> Tuple[nx.Graph, np.ndarray]:
-    b64_dump, matrix_dump = await asyncio.gather(redis.get(GRAPH_CACHE_KEY), redis.get(GRAPH_MATRIX_CACHE_KEY))
+def m_cache_key(name: str):
+    return GRAPH_MATRIX_CACHE_KEY + "_" + name
+
+
+async def invalidate_graph(redis: aioredis.Redis, graph_spec: Type[GraphSpec]):
+    await redis.delete(g_cache_key(graph_spec.name), m_cache_key(graph_spec.name))
+
+
+def build_matrix(G):
+    matrix = np.zeros((len(G.nodes), len(G.nodes)), dtype=np.float64)
+
+    for node_name in G.nodes:
+        distances = nx.shortest_path_length(G, node_name, weight="weight")
+        for target_name, dist in distances.items():
+            index_j = node_to_index(G, target_name)
+            matrix[node_to_index(G, node_name)][index_j] = dist
+
+    return matrix
+
+
+async def get_graph(
+    redis: aioredis.Redis, graph_spec: Type[GraphSpec]
+) -> Tuple[nx.Graph, np.ndarray]:
+    b64_dump, matrix_dump = await asyncio.gather(
+        redis.get(g_cache_key(graph_spec.name)), redis.get(m_cache_key(graph_spec.name))
+    )
     if b64_dump is not None and b64_dump != "":
-        await asyncio.gather(
-            redis.expire(GRAPH_CACHE_KEY, GRAPH_TTL),
-            redis.expire(GRAPH_MATRIX_CACHE_KEY, GRAPH_TTL)
-        )
-        graph_dump = base64.b64decode(b64_dump).decode('utf-8')
-        return nx.parse_graphml(graph_dump), ndarray_unpack(matrix_dump)
+        if matrix_dump is None or matrix_dump == "":
+            await invalidate_graph(redis, graph_spec)
+        else:
+            await asyncio.gather(
+                redis.expire(g_cache_key(graph_spec.name), GRAPH_TTL),
+                redis.expire(m_cache_key(graph_spec.name), GRAPH_TTL),
+            )
+            graph_dump = base64.b64decode(b64_dump).decode("utf-8")
+            return nx.parse_graphml(graph_dump), ndarray_unpack(matrix_dump)
 
-    def q(tx: Transaction):
-        query = """
-        MATCH (n)-[r]->(c)
-        RETURN n, r, c
-        """
-        result = tx.run(query)
-        return result.graph()
-
-    result = await neo4j(q)
+    result = await neo4j(graph_spec.q)
     G = nx.Graph()
 
     nodes = list(result._nodes.values())
@@ -94,32 +214,150 @@ async def get_graph(redis: aioredis.Redis) -> Tuple[nx.Graph, np.ndarray]:
             **dict(rel),
         )
 
-    matrix = np.zeros((len(G.nodes), len(G.nodes)), dtype=np.float64)
-
-    for node_name in G.nodes:
-        distances = nx.shortest_path_length(G, node_name, weight='weight')
-        print(distances)
-        for target_name, dist in distances.items():
-            index_j = node_to_index(G, target_name)
-            matrix[node_to_index(G, node_name)][index_j] = dist
-
+    matrix = build_matrix(G)
     matrix_dump = ndarray_pack(matrix)
 
     linefeed = chr(10)
     graph_dump = linefeed.join(nx.generate_graphml(G))
-    b64_dump = base64.b64encode(graph_dump.encode('utf-8'))
+    b64_dump = base64.b64encode(graph_dump.encode("utf-8"))
 
     await asyncio.gather(
-        redis.set(GRAPH_CACHE_KEY, b64_dump, ex=GRAPH_TTL),
-        redis.set(GRAPH_MATRIX_CACHE_KEY, matrix_dump, ex=GRAPH_TTL)
+        redis.set(g_cache_key(graph_spec.name), b64_dump, ex=GRAPH_TTL),
+        redis.set(m_cache_key(graph_spec.name), matrix_dump, ex=GRAPH_TTL),
     )
 
     return G, matrix
 
 
+class FullGraph(GraphSpec):
+    name = "full"
+
+    @staticmethod
+    def q(tx: Transaction):
+        query = """
+        MATCH (n)-[r]->(c)
+        RETURN n, r, c
+        """
+        result = tx.run(query)
+        return result.graph()
+
+
+class AnyTraversalGraph(GraphSpec):
+    name = "any-traversal"
+
+    @staticmethod
+    def q(tx: Transaction):
+        query = """
+        MATCH (n)-[r:Path{traversal:"any"}]-(c)
+        RETURN n, r, c
+        """
+        result = tx.run(query)
+        return result.graph()
+
+
+class SmallTraversalGraph(GraphSpec):
+    name = "small-traversal"
+
+    @staticmethod
+    def q(tx: Transaction):
+        query = """
+        MATCH (n)-[r:Path{traversal:"small"}]-(c)
+        RETURN n, r, c
+        """
+        result = tx.run(query)
+        return result.graph()
+
+
 async def calculate_paths(redis):
-    G, matrix = await get_graph(redis)
+    await asyncio.gather(
+        invalidate_graph(redis, FullGraph),
+        invalidate_graph(redis, AnyTraversalGraph),
+        invalidate_graph(redis, SmallTraversalGraph),
+    )
 
-    nodes = nodes_list(G)
+    demands = await get_demands()
+    big_fleet, small_fleet = await get_fleet()
 
-    return None
+    full_g, full_matrix = await get_graph(redis, FullGraph)
+    any_g, any_matrix = await get_graph(redis, AnyTraversalGraph)
+
+    spine = nx.shortest_path(any_g, START, END, weight="weight")
+    spine_g = any_g.copy()
+    spine_g.remove_nodes_from(set(any_g.nodes) - set(spine))
+
+    spine_data = {}
+    for ind in range(len(spine)):
+        source = spine[ind]
+        full_g_copy = full_g.copy()
+        full_g_copy.remove_nodes_from([*spine[:ind], *spine[ind + 1 :]])
+
+        node_set = set(nx.dfs_preorder_nodes(full_g_copy, source=source))
+        if len(node_set) == 1:
+            region_demand = sum(demands[source].values())
+            region_traversal_length = 0
+        else:
+            node_set.add(source)
+            path = nx.approximation.traveling_salesman_problem(
+                full_g_copy, weight="weight", nodes=node_set, cycle=False
+            )
+
+            region_demand = 0  # TODO
+            region_traversal_length = 0
+
+            prev = path[0]
+            for cur in path[1:]:
+                edge = full_g_copy[prev][cur]
+                region_traversal_length += edge["weight"]
+                region_demand += sum(demands[cur].values())
+                prev = cur
+
+        spine_data[source] = {
+            "demand": region_demand,
+            "traversal": region_traversal_length,
+        }
+
+    for spine_node, attrs in spine_data.items():
+        for key, value in attrs.items():
+            spine_g.nodes[spine_node][key] = value
+
+    topology = list(nx.dfs_preorder_nodes(spine_g, START))
+    if START == topology[-1]:
+        topology = topology[::-1]
+
+    traversal_nodes = set(
+        node for node in spine_g.nodes if spine_g.nodes[node]["traversal"] != 0
+    )
+    point_nodes = set(spine_g.nodes) - traversal_nodes
+
+    spine_dig = nx.DiGraph()
+
+    SYMBOLS = (
+        "абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ",
+        "abvgdeejzijklmnoprstufhzcss_y_euaABVGDEEJZIJKLMNOPRSTUFHZCSS_Y_EUA",
+    )
+    tr = {ord(a): ord(b) for a, b in zip(*SYMBOLS)}
+    def _graph_name(name: str):
+        return name.translate(tr).replace("-", "").replace(" ", "").replace('_', '')
+
+    def add_edges(topo, prev):
+        nonlocal spine_dig
+
+        for cur in topo:
+            if prev == 'Source' or cur == 'Sink' or cur == 'Source' or prev == 'Sink':
+                cost = 0
+            else:
+                cost = spine_g[prev][cur]['weight']
+
+            if cur != 'Source' and prev != 'Sink':
+                spine_dig.add_edge(_graph_name(prev), _graph_name(cur), cost=cost)
+            if cur not in ('Source', 'Sink'):
+                spine_dig.nodes[_graph_name(cur)]['demand'] = spine_g.nodes[cur]['demand']
+
+            prev = cur
+
+    add_edges((*topology, 'Sink'), 'Source')
+    add_edges(['Source', *topology][::-1], 'Sink')
+
+    cvrp_problem = vrpy.VehicleRoutingProblem(spine_dig, load_capacity=big_fleet[0].capacity, num_vehicles=len(big_fleet))
+    cvrp_problem.solve()
+    return cvrp_problem.best_routes

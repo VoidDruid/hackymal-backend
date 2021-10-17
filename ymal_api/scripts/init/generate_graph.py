@@ -118,11 +118,8 @@ def main() -> None:
         consumers_query = ""
         for consumer_name_ in consumers_and_points:
             consumer_id, point_id = consumers_and_points[consumer_name_]
-            consumer_tr_name = consumer_name(consumer_name_)
             point_tr_name = point_name(consumer_name_)
-            consumers_query += f'CREATE ({consumer_tr_name}:Consumer {{id: {consumer_id}, name:"{consumer_name_}"}})\n'
-            consumers_query += f'CREATE ({point_tr_name}:Point {{id: {point_id}, name:"Причал {consumer_name_}"}})\n'
-            consumers_query += f'CREATE ({point_tr_name})-[:Path {{weight:0, traversal: "any"}}]->({consumer_tr_name})\n'
+            consumers_query += f'CREATE ({point_tr_name}:Consumer {{id: {point_id}, name:"{consumer_name_}"}})\n'
 
         tx_return = tx.run(
             consumers_query

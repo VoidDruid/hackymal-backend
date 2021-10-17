@@ -1,14 +1,18 @@
 from enum import Enum
+from typing import List
 
 from pydantic import BaseModel
-from typing import List
 
 
 ### RESOURCES ###
 
 
 class Resource(str, Enum):
-    pass
+    DT_A_TU = 'ДТ "А" ТУ'
+    DT_Z = 'ДТ "З" ГОСТ'
+    DT_A = 'ДТ "А" ГОСТ'
+    DT_L = 'ДТ "Л" ГОСТ'
+    AI_92 = "АИ-92-К5"
 
 
 class ResourceCount(BaseModel):
@@ -35,17 +39,34 @@ class Producer(Location):
 
 
 class Traversal(str, Enum):
-    ANY = 'ANY'
-    SMALL = 'SMALL'
+    ANY = "ANY"
+    SMALL = "SMALL"
 
 
 class Ship(BaseModel):
     name: str
     traversal_type: Traversal = Traversal.SMALL
-    capacity: float  # tons
+    capacity: int  # tons
+    cargo: int
     speed: float = 22  # km/h
     transfer_speed: float = 30  # tons/hour
 
 
-big_ship = lambda name: Ship(name=name, traversal_type=Traversal.ANY, capacity=2500, speed=20)  # x8
-small_ship = lambda name: Ship(name=name, traversal_type=Traversal.SMALL, capacity=1000, speed=25)  # x8
+big_ship = lambda name: Ship(
+    name=name, traversal_type=Traversal.ANY, capacity=2500, cargo=2500, speed=20
+)  # x8
+small_ship = lambda name: Ship(
+    name=name, traversal_type=Traversal.SMALL, capacity=1000, cargo=0, speed=25
+)  # x8
+
+
+class Action(str, Enum):
+    UNLOAD = "unload"
+    WAIT = "wait"
+    LOAD = "load"
+
+
+class Order(BaseModel):
+    location: str
+    action: Action
+    time: int  # hour from the start of calculation

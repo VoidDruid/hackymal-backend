@@ -18,6 +18,8 @@ aioredis = {version = "2.0.0a1", extras = ["hiredis"]}
 neo4j = "^4.3.1"
 motor = "^2.4.0"
 networkx = {version = "^2.6.3", extras = ['default']}
+PuLP = "^2.5.1"
+vrpy = "^0.5.1"
 
 [tool.poetry.dev-dependencies]
 autoflake = "^1.4"
