@@ -116,3 +116,50 @@ func GetFutureRequestsFromDB(city *string) (reqs []models.Request, err error) {
     }
     return
 }
+
+func GetPastRequestsFromDB(city *string) (reqs []models.Request, err error) {
+    if city == nil {
+        return []models.Request{}, errors.New("invalid city")
+    }
+
+    ctx := context.TODO()
+    db := database.GetMongo()
+    requests := db.Database("ymal").Collection("requests")
+    cityFilter := "^" + *city + "$"
+    filter := bson.D{{"city", primitive.Regex{Pattern: cityFilter, Options: ""}}}
+    cur, err := requests.Find(ctx, filter)
+    if err != nil {
+        log.Println(err)
+        return
+    }
+    defer func(cur *mongo.Cursor, ctx context.Context) {
+        err := cur.Close(ctx)
+        if err != nil {
+
+        }
+    }(cur, ctx)
+
+
+    for cur.Next(ctx) {
+        var req models.Request
+        err := cur.Decode(&req)
+        if err != nil {
+            log.Println(err)
+            continue
+        }
+        t, err := time.Parse("02.01.2006", req.Date)
+        if err != nil {
+            continue
+        }
+
+        now := time.Now()
+        newT := now.Add(time.Hour * 5)
+        currentDate := fmt.Sprintf("%02d.%02d.%d",
+            newT.Day(), newT.Month(), newT.Year())
+
+        if t.Before(newT) || currentDate == req.Date {
+            reqs = append(reqs, req)
+        }
+    }
+    return
+}

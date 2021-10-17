@@ -61,5 +61,23 @@ func GetFutureRequests(w http.ResponseWriter, r *http.Request) {
     } else {
         _ = json.NewEncoder(w).Encode([]models.Request{})
     }
+}
 
+func GetPastRequests(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+
+    city := r.URL.Query().Get("city")
+    requests, err := crud.GetPastRequestsFromDB(&city)
+    if err != nil {
+        log.Println(err)
+        w.WriteHeader(400)
+        _ = json.NewEncoder(w).Encode(models.ErrorResult{Description: err.Error()})
+        return
+    }
+
+    if len(requests) != 0 {
+        _ = json.NewEncoder(w).Encode(requests)
+    } else {
+        _ = json.NewEncoder(w).Encode([]models.Request{})
+    }
 }

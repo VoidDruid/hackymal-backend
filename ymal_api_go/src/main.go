@@ -39,6 +39,7 @@ func main() {
     app := App{Router: mux.NewRouter()}
 
     // requests
+    app.Router.HandleFunc("/api/requests/getPastRequests", app.handleRequest(routes.GetPastRequests)).Methods("GET")
     app.Router.HandleFunc("/api/requests/getFutureRequests", app.handleRequest(routes.GetFutureRequests)).Methods("GET")
     app.Router.HandleFunc("/api/requests/createRequest", app.handleRequest(routes.CreateRequest)).Methods("POST")
 
